@@ -23,7 +23,12 @@ export class OrderAggregate {
     tax: Money;
   }): OrderAggregate {
     const netSubtotal = input.subtotal.subtract(input.discount);
-    if (input.subtotal.cents < 0 || input.discount.cents < 0 || input.discount.cents > input.subtotal.cents || input.tax.cents < 0) {
+    if (
+      input.subtotal.cents < 0 ||
+      input.discount.cents < 0 ||
+      input.discount.cents > input.subtotal.cents ||
+      input.tax.cents < 0
+    ) {
       throw new ConflictError("Order amounts violate pricing invariants");
     }
     const total = netSubtotal.add(input.tax);
@@ -34,14 +39,20 @@ export class OrderAggregate {
   }
 
   refund(amount: Money): void {
-    if (this.state === "REFUNDED" || amount.cents <= 0) throw new ConflictError("Order cannot accept this refund");
+    if (this.state === "REFUNDED" || amount.cents <= 0)
+      throw new ConflictError("Order cannot accept this refund");
     const refunded = this.refunded.add(amount);
-    if (refunded.cents > this.total.cents) throw new ConflictError("Refund exceeds refundable order balance");
+    if (refunded.cents > this.total.cents)
+      throw new ConflictError("Refund exceeds refundable order balance");
     this.refunded = refunded;
     this.state = refunded.cents === this.total.cents ? "REFUNDED" : "PARTIALLY_REFUNDED";
-    this.changes.push(domainEvent("order.refunded", this.id, {
-      amountCents: amount.cents, refundedCents: refunded.cents, status: this.state,
-    }));
+    this.changes.push(
+      domainEvent("order.refunded", this.id, {
+        amountCents: amount.cents,
+        refundedCents: refunded.cents,
+        status: this.state,
+      }),
+    );
   }
 
   pullEvents(): DomainEvent[] {

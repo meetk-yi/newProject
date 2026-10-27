@@ -7,8 +7,10 @@ export class Money {
   ) {}
 
   static of(cents: number, currency = "USD"): Money {
-    if (!Number.isSafeInteger(cents)) throw new DomainError("Money must use integer minor units", "INVALID_MONEY");
-    if (!/^[A-Z]{3}$/.test(currency)) throw new DomainError("Currency must be an ISO 4217 code", "INVALID_CURRENCY");
+    if (!Number.isSafeInteger(cents))
+      throw new DomainError("Money must use integer minor units", "INVALID_MONEY");
+    if (!/^[A-Z]{3}$/.test(currency))
+      throw new DomainError("Currency must be an ISO 4217 code", "INVALID_CURRENCY");
     return new Money(cents, currency);
   }
 
@@ -23,6 +25,7 @@ export class Money {
   }
 
   private assertSameCurrency(other: Money): void {
-    if (this.currency !== other.currency) throw new DomainError("Currency mismatch", "CURRENCY_MISMATCH");
+    if (this.currency !== other.currency)
+      throw new DomainError("Currency mismatch", "CURRENCY_MISMATCH");
   }
 }

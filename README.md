@@ -8,7 +8,10 @@ A TypeScript/Fastify service for order checkout, inventory, promotions, wallets,
 src/
   config/          Environment parsing and runtime configuration
   domain/          Business errors and pure domain policies
-  application/     Commerce use cases and transaction orchestration
+  application/
+    use-cases/     Focused order, wallet, inventory, shipping, and other use cases
+    shared/        Reusable application transaction coordination
+    index.ts       Composition root for application use cases
   infrastructure/  Prisma database client
   presentation/    Fastify HTTP routes and Zod request schemas
   app.ts           Dependency composition and error mapping
@@ -18,7 +21,7 @@ prisma/
 test/              Unit tests for deterministic domain policies
 ```
 
-The application service is composed with its Prisma dependency by `createApp`, which serves as the manual dependency-injection boundary. Amounts are represented as integer minor currency units. Inventory allocation and wallet debits use conditional database updates, with serializable transactions for operations involving concurrent state changes. Invoice and dispute side effects are recorded in an outbox table so a worker can process them reliably; this repository intentionally does not pretend an external document or payment provider is integrated.
+Each application use case is grouped by business capability rather than exposed through a single service with unrelated responsibilities. The manual composition function in `application/index.ts` wires use cases into the presentation layer; infrastructure dependencies are passed in at the application boundary. Amounts are represented as integer minor currency units. Inventory allocation and wallet debits use conditional database updates, with serializable transactions for operations involving concurrent state changes. Invoice and dispute side effects are recorded in an outbox table so a worker can process them reliably; this repository intentionally does not pretend an external document or payment provider is integrated.
 
 ## Requirements and setup
 
@@ -54,18 +57,18 @@ The API uses serializable transactions for checkout, refunds, allocations, trans
 
 All endpoints are under `/api/v1`. Request and response monetary fields are integer cents. UUID fields require UUID strings. Errors use `{ "error": { "code": "...", "message": "..." } }`.
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/orders/checkout` | Validate line items and optional coupons, reserve stock, calculate tax, place the order, and debit a wallet. Card payment returns `503 PAYMENT_PROVIDER_UNAVAILABLE` until a real gateway adapter is configured. |
-| POST | `/orders/:id/refund` | Apply a partial/full refund and reverse wallet ledger entries; restocks on full refund. |
-| POST | `/inventory/allocate` | Atomically reserve inventory for a bounded TTL. |
-| POST | `/discounts/validate` | Check active dates, usage limits, user tier, minimums, and stacking rules. |
-| POST | `/loyalty/redeem` | Consume earliest-expiring point lots and credit the USD wallet at one cent per point. |
-| POST | `/wallet/transfer` | Perform a same-currency double-entry transfer with an idempotency key. |
-| GET | `/invoices/:id/generate` | Queue invoice generation via an outbox event and return HTTP 202. The path parameter is the order ID. |
-| POST | `/subscriptions/renew` | Charge the subscriber wallet, advance billing, or enter/expire a seven-day grace period. |
-| POST | `/shipping/calculate` | Calculate two sample carrier rates using actual versus dimensional weight. Replace sample rates with carrier adapters for production. |
-| POST | `/disputes/open` | Open an order dispute, freeze the refundable balance as escrow, and enqueue an outbox event. |
+| Method | Path                     | Purpose                                                                                                                                                                                                          |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/orders/checkout`       | Validate line items and optional coupons, reserve stock, calculate tax, place the order, and debit a wallet. Card payment returns `503 PAYMENT_PROVIDER_UNAVAILABLE` until a real gateway adapter is configured. |
+| POST   | `/orders/:id/refund`     | Apply a partial/full refund and reverse wallet ledger entries; restocks on full refund.                                                                                                                          |
+| POST   | `/inventory/allocate`    | Atomically reserve inventory for a bounded TTL.                                                                                                                                                                  |
+| POST   | `/discounts/validate`    | Check active dates, usage limits, user tier, minimums, and stacking rules.                                                                                                                                       |
+| POST   | `/loyalty/redeem`        | Consume earliest-expiring point lots and credit the USD wallet at one cent per point.                                                                                                                            |
+| POST   | `/wallet/transfer`       | Perform a same-currency double-entry transfer with an idempotency key.                                                                                                                                           |
+| GET    | `/invoices/:id/generate` | Queue invoice generation via an outbox event and return HTTP 202. The path parameter is the order ID.                                                                                                            |
+| POST   | `/subscriptions/renew`   | Charge the subscriber wallet, advance billing, or enter/expire a seven-day grace period.                                                                                                                         |
+| POST   | `/shipping/calculate`    | Calculate two sample carrier rates using actual versus dimensional weight. Replace sample rates with carrier adapters for production.                                                                            |
+| POST   | `/disputes/open`         | Open an order dispute, freeze the refundable balance as escrow, and enqueue an outbox event.                                                                                                                     |
 
 ### Example requests
 
@@ -95,9 +98,12 @@ npm test
 npm run test:integration
 npm run typecheck
 npm run build
+npm run format:check
 ```
 
 Domain policy tests are independent of PostgreSQL. Set `TEST_DATABASE_URL` to a disposable migrated PostgreSQL database to enable the PostgreSQL integration test. Extend this suite with transaction-level scenarios for serialization conflicts, unique constraints, rollbacks, expiration, and idempotent retries.
+
+Run `npm run format` to apply the repository's Prettier configuration.
 
 ## Operational notes
 

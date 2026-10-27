@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateBillableWeight, calculateDiscount, calculateTax } from "../src/domain/policies.js";
+import {
+  calculateBillableWeight,
+  calculateDiscount,
+  calculateTax,
+} from "../src/domain/policies.js";
 import { OrderAggregate } from "../src/domain/order.js";
 import { Money } from "../src/domain/money.js";
 
