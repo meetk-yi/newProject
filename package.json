@@ -1,0 +1,37 @@
+{
+  "name": "commerce-ledger-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DDD-oriented commerce order and wallet ledger API",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:integration": "vitest run test/integration",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.8.2",
+    "dotenv": "^16.5.0",
+    "fastify": "^5.3.2",
+    "pino": "^9.7.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "prisma": "^6.8.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  }
+}

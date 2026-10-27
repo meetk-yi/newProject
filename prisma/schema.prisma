@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PLACED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  tier          String   @default("STANDARD")
+  loyaltyPoints Int      @default(0)
+  createdAt     DateTime @default(now())
+  orders        Order[]
+  wallets       Wallet[]
+}
+
+model Product {
+  id          String      @id @default(uuid()) @db.Uuid
+  sku         String      @unique
+  name        String
+  priceCents  Int
+  weightGrams Int         @default(0)
+  lengthCm    Float       @default(0)
+  widthCm     Float       @default(0)
+  heightCm    Float       @default(0)
+  active      Boolean     @default(true)
+  orderLines  OrderLine[]
+  inventory   Inventory[]
+}
+
+model Order {
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @db.Uuid
+  status          OrderStatus @default(PLACED)
+  subtotalCents   Int
+  discountCents   Int         @default(0)
+  taxCents        Int
+  totalCents      Int
+  refundedCents   Int         @default(0)
+  currency        String      @default("USD")
+  createdAt       DateTime    @default(now())
+  user            User        @relation(fields: [userId], references: [id])
+  lines           OrderLine[]
+  refunds         Refund[]
+  dispute         Dispute?
+  invoice         Invoice?
+  @@index([userId, createdAt])
+}
+
+model OrderLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  orderId        String  @db.Uuid
+  productId      String  @db.Uuid
+  warehouse      String  @default("default")
+  quantity       Int
+  unitPriceCents Int
+  refundedQty    Int     @default(0)
+  order          Order   @relation(fields: [orderId], references: [id])
+  product        Product @relation(fields: [productId], references: [id])
+}
+
+model Inventory {
+  id        String  @id @default(uuid()) @db.Uuid
+  productId String  @db.Uuid
+  warehouse String  @default("default")
+  onHand    Int
+  reserved  Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id])
+  @@unique([productId, warehouse])
+}
+
+model Allocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  warehouse String
+  quantity  Int
+  expiresAt DateTime
+  releasedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([productId, warehouse, expiresAt])
+}
+
+model Discount {
+  id               String   @id @default(uuid()) @db.Uuid
+  code             String   @unique
+  percentOff       Int
+  active           Boolean  @default(true)
+  stackable        Boolean  @default(false)
+  minimumCents     Int      @default(0)
+  maxUses          Int?
+  uses             Int      @default(0)
+  allowedTiers     String[] @default([])
+  expiresAt        DateTime?
+}
+
+model Wallet {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  currency      String   @default("USD")
+  balanceCents  Int      @default(0)
+  user          User     @relation(fields: [userId], references: [id])
+  @@unique([userId, currency])
+}
+
+model LedgerEntry {
+  id             String   @id @default(uuid()) @db.Uuid
+  walletId       String   @db.Uuid
+  amountCents    Int
+  currency       String
+  kind           String
+  reference      String
+  idempotencyKey String?
+  createdAt      DateTime @default(now())
+  @@index([walletId, createdAt])
+  @@unique([walletId, idempotencyKey])
+}
+
+model Refund {
+  id             String   @id @default(uuid()) @db.Uuid
+  orderId        String   @db.Uuid
+  amountCents    Int
+  reason         String
+  createdAt      DateTime @default(now())
+  order          Order    @relation(fields: [orderId], references: [id])
+}
+
+model LoyaltyLot {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  points         Int
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  @@index([userId, expiresAt])
+}
+
+model Invoice {
+  id          String   @id @default(uuid()) @db.Uuid
+  orderId     String   @unique @db.Uuid
+  status      String   @default("PENDING")
+  documentUrl String?
+  requestedAt DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id])
+}
+
+model Subscription {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  amountCents     Int
+  currency        String   @default("USD")
+  status          SubscriptionStatus @default(ACTIVE)
+  nextBillingAt   DateTime
+  graceUntil      DateTime?
+  lastRenewedAt   DateTime?
+  @@index([status, nextBillingAt])
+}
+
+model ShipmentQuote {
+  id                 String   @id @default(uuid()) @db.Uuid
+  carrier            String
+  service            String
+  amountCents        Int
+  billableWeightGrams Int
+  createdAt          DateTime @default(now())
+}
+
+model Dispute {
+  id             String       @id @default(uuid()) @db.Uuid
+  orderId        String       @unique @db.Uuid
+  status         DisputeStatus @default(OPEN)
+  reason         String
+  evidence       Json
+  escrowCents    Int
+  createdAt      DateTime     @default(now())
+  order          Order        @relation(fields: [orderId], references: [id])
+}
+
+model OutboxEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  type          String
+  aggregateId   String   @db.Uuid
+  payload       Json
+  occurredAt    DateTime @default(now())
+  processedAt   DateTime?
+  @@index([processedAt, occurredAt])
+}
+
+model IdempotencyRecord {
+  key           String   @id
+  operation     String
+  requestHash   String
+  response      Json
+  createdAt     DateTime @default(now())
+}
